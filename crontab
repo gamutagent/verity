@@ -1,0 +1,11 @@
+# Intel Sweep — Cron Schedule
+# Used by docker-compose scheduler service
+# Edit topics and times to match your config.yaml
+
+# Competitors + market signals: daily at 7am UTC
+0 7 * * *   root   cd /app && python src/scanner.py competitors market_signals >> /app/logs/cron.log 2>&1
+
+# Tech patterns: Fridays at 7am UTC
+0 7 * * 5   root   cd /app && python src/scanner.py tech_patterns >> /app/logs/cron.log 2>&1
+
+# Empty line required by cron

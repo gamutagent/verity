@@ -1,0 +1,176 @@
+# ============================================================================
+# Intel Sweep — Competitive Intelligence Scanner
+# Configuration Reference
+# ============================================================================
+# Copy this file to config.yaml and customize for your use case.
+# All API keys should be set via environment variables, never in this file.
+# ============================================================================
+
+# --- Identity ---
+project:
+  name: "my-intel-sweep"
+  description: "Competitive landscape monitoring for [your domain]"
+
+# --- Topics to Monitor ---
+# Each topic defines a monitoring track with its own keywords,
+# relevance criteria, and priority level.
+topics:
+  - id: competitors
+    name: "Competitor Moves"
+    description: "Track funding rounds, product launches, acquisitions, and leadership changes"
+    keywords:
+      - "Harmonic.ai"
+      - "Sourcescrub"
+      - "SignalFire Beacon"
+      - "PitchBook automation"
+    relevance_prompt: |
+      Score this article for relevance to competitive intelligence in the
+      PE/VC due diligence tooling space. High relevance: direct competitor
+      funding, product launches, pivots, acquisitions, or leadership changes.
+      Medium: adjacent market moves. Low: tangential mentions.
+    priority: high
+    schedule: "0 7 * * *"  # daily at 7am UTC
+
+  - id: market_signals
+    name: "Market Signals"
+    description: "Industry trends, regulatory changes, analyst reports"
+    keywords:
+      - "AI due diligence"
+      - "entity verification"
+      - "APAC startup ecosystem"
+      - "PE VC technology"
+    relevance_prompt: |
+      Score this article for strategic relevance to AI-powered entity
+      verification and startup intelligence platforms operating in
+      APAC markets. High: regulatory changes, market sizing, analyst
+      reports. Medium: adjacent technology trends. Low: general AI news.
+    priority: medium
+    schedule: "0 7 * * 1,4"  # Mon and Thu at 7am UTC
+
+  - id: tech_patterns
+    name: "Architecture Patterns"
+    description: "Agentic AI, MCP protocols, verification infrastructure"
+    keywords:
+      - "agentic architecture"
+      - "MCP protocol AI"
+      - "LLM verification"
+      - "hallucination detection"
+    relevance_prompt: |
+      Score this article for technical relevance to building AI agent
+      systems with verification layers, confidence scoring, and
+      source-lineage tracking. High: novel architectures, benchmark
+      results, production case studies. Medium: tutorials, opinion
+      pieces. Low: hype articles with no technical substance.
+    priority: low
+    schedule: "0 7 * * 5"  # Fridays at 7am UTC
+
+# --- Search Configuration ---
+search:
+  provider: "google"              # google | serper | brave | tavily
+  max_results_per_keyword: 5      # results per keyword per run
+  lookback_hours: 168             # only surface content from last N hours
+  deduplicate: true               # skip URLs already seen
+  # provider-specific settings loaded from env:
+  # SEARCH_API_KEY
+
+# --- Scoring ---
+scoring:
+  provider: "gemini"              # gemini | openai | anthropic | ollama
+  model: "gemini-2.5-flash"      # model string for scoring LLM
+  temperature: 0.1                # low temp for consistent scoring
+  threshold:
+    surface: 0.6                  # minimum score to surface to user
+    auto_approve: 0.9             # above this, skip manual approval
+  # provider-specific settings loaded from env:
+  # SCORING_API_KEY
+  # OLLAMA_BASE_URL (if provider: ollama)
+
+# --- Notifications ---
+notifications:
+  - channel: slack
+    webhook_env: "SLACK_WEBHOOK_URL"     # env var name, not the URL itself
+    format: "compact"                     # compact | detailed
+    include_score: true
+    include_summary: true
+    approval_enabled: true               # add approve/discard reactions
+    # Optional: filter which topics go to this channel
+    topics: ["competitors", "market_signals"]
+
+  - channel: telegram
+    bot_token_env: "TELEGRAM_BOT_TOKEN"
+    chat_id_env: "TELEGRAM_CHAT_ID"
+    format: "detailed"
+    topics: ["tech_patterns"]
+
+# --- Approval & Storage ---
+approval:
+  method: "reaction"              # reaction | webhook | cli
+  approved_label: "thumbsup"     # emoji reaction = approved
+  discarded_label: "thumbsdown"  # emoji reaction = discarded
+  auto_expire_hours: 72          # un-reviewed items expire after N hours
+
+storage:
+  backend: "firestore"            # firestore | local_json | sqlite
+  # Firestore settings
+  collection: "intel_sweep_items"
+  # Local settings
+  local_path: "./data/items.json"
+  # Approved items accumulate here for downstream consumption
+  approved_output:
+    format: "jsonl"               # jsonl | markdown | both
+    path: "./data/approved.jsonl"
+    # Optional: also write to a Google Doc for Claude context
+    gdoc_id: ""                   # leave empty to disable
+
+# --- Authenticity Detection ---
+# Three-layer AI content authenticity pipeline (see src/authenticity.py).
+# Layer 1: Source reputation (YAML-driven domain tiers, zero cost)
+# Layer 2: Content heuristics (7 deterministic Python checks, zero cost)
+# Layer 3: LLM authenticity detection (optional, 1 API call per article)
+authenticity:
+  min_score: 0.4              # Block items below this composite score
+  auto_approve_min_score: 0.8 # Require this score for auto-approval (alongside relevance)
+  use_llm_layer: false        # Enable Layer 3 LLM check (uses scoring API key, costs money)
+  source_reputation_path: "config/source_reputation.yaml"  # Domain trust DB
+
+# --- Gamut Intelligence Integration (Optional) ---
+# If you have Gamut API credentials, discovered entities can be
+# automatically verified against APAC registries with confidence scoring.
+gamut:
+  enabled: false
+  api_base: "https://api.gamutagent.ai/v1"
+  api_key_env: "GAMUT_API_KEY"
+  auto_verify_entities: true      # run gamut_verify_entity on discovered companies
+  attach_confidence_score: true   # include CVI in surfaced results
+
+# --- Secrets ---
+# How API keys and tokens are resolved. The config file contains only
+# the NAMES of secrets, never values.
+secrets:
+  backend: "env"                  # env | dotenv | gcp | aws | azure
+  # dotenv settings:
+  # dotenv_path: ".env"
+  # GCP settings (also uses GCP_PROJECT_ID env var):
+  # project_id: "my-project"
+  # secret_prefix: "intel-sweep-"
+  # AWS settings (also uses AWS_REGION env var):
+  # region: "us-east-1"
+  # secret_prefix: "intel-sweep/"
+  # Azure settings (also uses AZURE_VAULT_URL env var):
+  # vault_url: "https://my-vault.vault.azure.net"
+
+# --- Security ---
+security:
+  # Bind to localhost only — never expose to 0.0.0.0
+  bind_address: "127.0.0.1"
+  # Rate limiting
+  max_searches_per_hour: 50
+  max_scoring_calls_per_hour: 200
+  # Content safety
+  block_domains:                  # never fetch content from these
+    - "malware-site.example"
+  allow_domains: []               # if non-empty, ONLY fetch from these
+  # Audit
+  log_all_searches: true
+  log_scoring_decisions: true
+  audit_log_path: "./logs/audit.jsonl"

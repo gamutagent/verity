@@ -1,0 +1,115 @@
+# ============================================================================
+# Verity — Source Reputation Database
+# Domain trust tiers for authenticity scoring (Layer 1).
+#
+# tier_1 (score: 1.0) — Authoritative: government registries, major wire
+#   services, established financial press with editorial standards.
+# tier_2 (score: 0.8) — Credible: established trade press, reputable
+#   regional outlets, major platform blogs with editorial oversight.
+# tier_3 (score: 0.5) — Acceptable: legitimate but lower-authority sources,
+#   regional outlets, niche publications.
+# blocklist (score: 0.0) — Never surface: known spam, SEO farms, AI content
+#   mills, known disinformation sources.
+#
+# Subdomain resolution is automatic: blog.reuters.com → reuters.com → tier_1
+# ============================================================================
+
+tier_1:
+  # Wire services & global financial press
+  - reuters.com
+  - bloomberg.com
+  - ft.com
+  - wsj.com
+  - economist.com
+  - apnews.com
+  - afp.com
+  # Government & regulatory registries
+  - acra.gov.sg
+  - companieshouse.gov.uk
+  - sec.gov
+  - mas.gov.sg
+  - mof.gov.sg
+  # APAC institutional press
+  - channelnewsasia.com
+  - straitstimes.com
+  - scmp.com
+  - nikkei.com
+  - thehindu.com
+  - livemint.com
+  - businesstimes.com.sg
+  # Major tech/startup press with editorial boards
+  - techcrunch.com
+  - wired.com
+  - theverge.com
+  - arstechnica.com
+
+tier_2:
+  # Established startup/VC media
+  - dealstreetasia.com
+  - e27.co
+  - techinasia.com
+  - yourstory.com
+  - restofworld.org
+  - sifted.eu
+  - pitchbook.com
+  - crunchbase.com
+  # Reputable regional business press
+  - businessinsider.com
+  - forbes.com
+  - fortune.com
+  - inc.com
+  - venturebeat.com
+  - zdnet.com
+  - techradar.com
+  # APAC regional outlets
+  - thestar.com.my
+  - bangkokpost.com
+  - vietnamnews.vn
+  - philstar.com
+  - thejakartapost.com
+  - koreatimes.co.kr
+  # Platform/institutional blogs with editorial review
+  - a16z.com
+  - sequoiacap.com
+  - blog.google
+  - aws.amazon.com
+  - azure.microsoft.com
+
+tier_3:
+  # Legitimate niche/trade publications
+  - fintech.global
+  - fintechnews.sg
+  - fintechasia.net
+  - pymnts.com
+  - crowdfundinsider.com
+  - asiatimes.com
+  - digitimes.com
+  - opensourceforu.com
+  # Accelerator and ecosystem outlets
+  - startupsg.gov.sg
+  - startupnation.com
+  - startupdaily.net
+  - geekwire.com
+  - betakit.com
+  - enterprisetimes.co.uk
+  # PR distribution (content may be company-authored)
+  - prnewswire.com
+  - businesswire.com
+  - globenewswire.com
+  - accesswire.com
+
+blocklist:
+  # Known AI content farms / SEO spam
+  - articlesbase.com
+  - ezinearticles.com
+  - hubpages.com
+  - buzzle.com
+  - selfgrowth.com
+  # Known disinformation / low-credibility
+  - naturalnews.com
+  - infowars.com
+  - beforeitsnews.com
+  - zerohedge.com
+  # Spam/scraper aggregators
+  - newsnow.co.uk
+  - alltop.com

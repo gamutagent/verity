@@ -1,0 +1,45 @@
+# ============================================================================
+# Intel Sweep — Docker Compose
+# Works anywhere Docker runs: laptop, VPS, EC2, GCE, Azure VM, Hetzner, etc.
+# ============================================================================
+
+services:
+  scanner:
+    build: .
+    container_name: intel-sweep
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - sweep-data:/app/data
+      - sweep-logs:/app/logs
+    # Security: no network ports exposed — outbound only
+    network_mode: bridge
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+  # Optional: cron scheduler (if not using cloud-native scheduler)
+  scheduler:
+    build: .
+    container_name: intel-sweep-scheduler
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - sweep-data:/app/data
+      - sweep-logs:/app/logs
+      - ./scripts/crontab:/etc/cron.d/intel-sweep:ro
+    entrypoint: ["cron", "-f"]
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.25"
+
+volumes:
+  sweep-data:
+  sweep-logs:
