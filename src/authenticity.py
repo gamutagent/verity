@@ -155,27 +155,37 @@ class LLMAuthenticityDetector:
 
 class AuthenticityEngine:
     """Orchestrates the 3 layers."""
+
+    # Default composite weights (without LLM and with LLM)
+    _DEFAULT_WEIGHTS_NO_LLM = {"source": 0.45, "heuristic": 0.55}
+    _DEFAULT_WEIGHTS_LLM    = {"source": 0.30, "heuristic": 0.35, "llm": 0.35}
+
     def __init__(self, config: Dict[str, Any], scorer=None):
         rep_config = config.get("source_reputation", {})
         self.reputation = SourceReputation(rep_config)
         self.heuristics = ContentHeuristics()
         self.llm_detector = LLMAuthenticityDetector(scorer) if scorer else None
 
+        # Allow caller to override weights via config["weights"]
+        user_weights = config.get("weights", {})
+        self._w_no_llm = {**self._DEFAULT_WEIGHTS_NO_LLM, **user_weights.get("no_llm", {})}
+        self._w_llm    = {**self._DEFAULT_WEIGHTS_LLM,    **user_weights.get("with_llm", {})}
+
     async def evaluate(self, url: str, text: str, title: str = "") -> AuthenticityResult:
         s_score = self.reputation.score(url)
         h_score = self.heuristics.analyze(text, title)
-        
+
         l_score = None
         if self.llm_detector:
             l_score = await self.llm_detector.detect(text)
-            
+
         if l_score is not None:
-            # Composite: source×0.30 + heuristic×0.35 + llm×0.35
-            comp = (s_score * 0.30) + (h_score * 0.35) + (l_score * 0.35)
+            w = self._w_llm
+            comp = s_score * w["source"] + h_score * w["heuristic"] + l_score * w["llm"]
         else:
-            # Redistribute: source×0.45 + heuristic×0.55
-            comp = (s_score * 0.45) + (h_score * 0.55)
-            
+            w = self._w_no_llm
+            comp = s_score * w["source"] + h_score * w["heuristic"]
+
         return AuthenticityResult(
             source_score=round(s_score, 3),
             heuristic_score=round(h_score, 3),

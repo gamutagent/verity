@@ -49,7 +49,10 @@ class Verity:
         use_llm = self.authenticity_cfg.get("use_llm_layer", False)
         scorer_for_llm = self.scorer if use_llm else None
         self.authenticity_engine = AuthenticityEngine(
-            {"source_reputation": rep_config},
+            {
+                "source_reputation": rep_config,
+                "weights": self.authenticity_cfg.get("weights", {}),
+            },
             scorer=scorer_for_llm,
         )
 

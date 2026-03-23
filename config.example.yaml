@@ -132,6 +132,15 @@ authenticity:
   auto_approve_min_score: 0.8 # Require this score for auto-approval (alongside relevance)
   use_llm_layer: false        # Enable Layer 3 LLM check (uses scoring API key, costs money)
   source_reputation_path: "config/source_reputation.yaml"  # Domain trust DB
+  # Optional: override composite scoring weights (values must sum to 1.0 per group)
+  # weights:
+  #   no_llm:                 # used when use_llm_layer: false (defaults: source 0.45, heuristic 0.55)
+  #     source: 0.45
+  #     heuristic: 0.55
+  #   with_llm:               # used when use_llm_layer: true (defaults: source 0.30, heuristic 0.35, llm 0.35)
+  #     source: 0.30
+  #     heuristic: 0.35
+  #     llm: 0.35
 
 # --- Gamut Intelligence Integration (Optional) ---
 # If you have Gamut API credentials, discovered entities can be
