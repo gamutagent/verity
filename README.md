@@ -1,26 +1,27 @@
-# Intel Sweep
+# Verity
 
-**Competitive intelligence scanning that doesn't compromise your security.**
+**Config-driven information scanner with three-layer AI content authenticity detection.**
 
-Intel Sweep is a config-driven, security-hardened competitive intelligence scanner. It monitors topics you care about, scores results for relevance using the LLM of your choice, and surfaces actionable items to your existing channels — Slack, Telegram, or any webhook.
+Verity monitors topics you define, scores results for relevance using the LLM of your choice, and — before surfacing anything — runs every item through a three-layer authenticity pipeline to filter out low-credibility sources, AI-generated noise, and press release spam.
 
 Built by [Gamut Intelligence](https://gamutagent.ai).
 
 ## Why This Exists
 
-AI agents that "do everything" are exciting. They're also [attack surface nightmares](https://www.bitdefender.com/en-us/blog/labs/bitdefender-discovers-135-000-exposed-openclaw-instances). Intel Sweep takes one pattern that actually works — scheduled search → LLM scoring → human-in-the-loop approval — and does it with security defaults you'd actually deploy at a company.
+Most search-and-score pipelines have the same blind spot: they score *relevance* but not *authenticity*. A high-relevance score on a PR Newswire repost or an AI-generated article is noise, not signal. Verity adds a second gate before anything reaches you.
 
-- **Scoped by design**: it searches and scores. That's it. No filesystem access, no email sending, no autonomous tool chaining.
-- **Localhost by default**: binds to `127.0.0.1`. Never `0.0.0.0`.
-- **No plugin marketplace**: your config is your config. No third-party skills, no supply chain risk.
-- **Audit everything**: every search query and scoring decision is logged to an append-only audit file.
+- **Three-layer authenticity scoring** — source reputation, content heuristics, and optional LLM-based detection run on every item before it surfaces
+- **Scoped by design** — searches and scores. No filesystem access, no email sending, no autonomous tool chaining
+- **Localhost by default** — binds to `127.0.0.1`. Never `0.0.0.0`
+- **Audit everything** — every search query, relevance score, and authenticity decision is logged to an append-only audit file
+- **No plugin marketplace** — your config is your config. No third-party skills, no supply chain risk
 
 ## Quickstart
 
 ```bash
 # Clone and install
-git clone https://github.com/gamut-ai/intel-sweep.git
-cd intel-sweep
+git clone https://github.com/gamutagent/verity.git
+cd verity
 pip install -r requirements.txt
 
 # Configure
@@ -39,29 +40,53 @@ python src/scanner.py
 ## How It Works
 
 ```
-┌─────────────┐     ┌──────────┐     ┌────────────┐     ┌──────────┐
-│ Web Search   │────▶│ LLM Score │────▶│ Deduplicate │────▶│ Notify   │
-│ (per keyword)│     │ (0.0-1.0) │     │ (URL hash)  │     │ (Slack/  │
-└─────────────┘     └──────────┘     └────────────┘     │ Telegram)│
-                                                         └────┬─────┘
-                                                              │
-                                          ┌───────────────────▼──────┐
-                                          │ Human: 👍 approve / 👎 skip │
-                                          └───────────────────┬──────┘
-                                                              │
-                                                    ┌─────────▼────────┐
-                                                    │ Approved items   │
-                                                    │ accumulate in    │
-                                                    │ JSONL / Markdown │
-                                                    └──────────────────┘
+┌─────────────┐     ┌───────────┐     ┌─────────────────────┐     ┌────────────┐
+│ Web Search   │────▶│ LLM Score  │────▶│ Authenticity Check   │────▶│ Notify     │
+│ (per keyword)│     │ (0.0–1.0)  │     │ (3-layer pipeline)   │     │ (Slack /   │
+└─────────────┘     └───────────┘     └─────────────────────┘     │  Telegram) │
+                                                                    └─────┬──────┘
+                                                                          │
+                                                              ┌───────────▼──────────┐
+                                                              │ Human: 👍 approve /   │
+                                                              │         👎 skip        │
+                                                              └───────────┬──────────┘
+                                                                          │
+                                                                ┌─────────▼──────────┐
+                                                                │ Approved items      │
+                                                                │ accumulate in       │
+                                                                │ JSONL / Markdown    │
+                                                                └─────────────────────┘
 ```
 
-1. **Search**: runs your keywords against a search API on a cron schedule
-2. **Score**: each result is scored by an LLM against your topic-specific relevance prompt
-3. **Deduplicate**: URL hashing prevents resurfacing items you've already seen
-4. **Notify**: items above threshold are pushed to Slack/Telegram with score and context
-5. **Approve**: react with 👍 to keep, 👎 to discard — or let high-confidence items auto-approve
-6. **Accumulate**: approved items build up in a structured file for downstream use
+1. **Search** — runs your keywords against a search API on a cron schedule
+2. **Score** — each result is scored by an LLM against your topic-specific relevance prompt
+3. **Authenticity check** — items that pass relevance go through three layers (see below)
+4. **Deduplicate** — URL hashing prevents resurfacing items you've already seen
+5. **Notify** — items that pass both gates are pushed to Slack/Telegram with scores and context
+6. **Approve** — react with 👍 to keep, 👎 to discard — or let high-confidence items auto-approve
+7. **Accumulate** — approved items build up in a structured file for downstream use
+
+### Three-Layer Authenticity Pipeline
+
+Verity's authenticity engine runs after relevance scoring. All three layers produce a composite score (0.0–1.0). Items below `authenticity.min_score` are blocked before they reach you. Auto-approval requires *both* high relevance *and* high authenticity.
+
+| Layer | What it checks | Cost |
+|-------|---------------|------|
+| **Layer 1: Source Reputation** | Domain trust tier — authoritative registries and established outlets score high; press wire services and blocklisted domains score low | Zero (YAML lookup) |
+| **Layer 2: Content Heuristics** | 7 deterministic checks: excessive capitalization, promotional language density, missing byline, link-to-text ratio, boilerplate patterns, duplicate-sentence ratio, AI fluency markers | Zero (pure Python) |
+| **Layer 3: LLM Detection** | Optional LLM call asking: "Is this human-reported news or AI-generated/PR content?" — uses your existing scoring API key | 1 API call per item |
+
+```yaml
+authenticity:
+  min_score: 0.4              # block items below this composite score
+  auto_approve_min_score: 0.8 # require this for auto-approval (alongside relevance)
+  use_llm_layer: false        # enable Layer 3 (costs money — disable for high-volume runs)
+  source_reputation_path: "config/source_reputation.yaml"
+```
+
+Composite scoring: `source × 0.45 + heuristic × 0.55` (without LLM), or `source × 0.30 + heuristic × 0.35 + llm × 0.35` (with LLM enabled).
+
+The source reputation database (`config/source_reputation.yaml`) ships with ~80 pre-classified domains. Add your own.
 
 ## Configuration
 
@@ -72,6 +97,7 @@ See [`config.example.yaml`](config.example.yaml) for the full reference. Key sec
 | `topics` | What to monitor — keywords, relevance prompts, schedules |
 | `search` | Search provider (Serper, Tavily, Brave) and lookback window |
 | `scoring` | LLM provider (Gemini, OpenAI, Anthropic, Ollama) and thresholds |
+| `authenticity` | Three-layer authenticity gate and per-layer config |
 | `notifications` | Where results go (Slack, Telegram, webhook) |
 | `storage` | Where state lives (Firestore, SQLite, local JSON) |
 | `security` | Bind address, rate limits, domain filtering, audit logging |
@@ -109,28 +135,23 @@ gamut:
 
 ## Deploy
 
-Intel Sweep runs anywhere: your laptop, a VPS, or any major cloud provider.
+Verity runs anywhere: your laptop, a VPS, or any major cloud provider.
 
 ### Option 1: Docker Compose (any host)
-
-The simplest path. Works on any machine with Docker.
 
 ```bash
 cp config.example.yaml config.yaml   # customize topics and thresholds
 cp .env.example .env                  # fill in API keys
-./scripts/deploy.sh docker            # builds and starts containers
+./deploy.sh docker                    # builds and starts containers
 ```
 
 ### Option 2: Cloud-Native (auto-detect)
 
-The deploy script auto-detects your cloud environment and sets up the right
-container service, scheduler, and secrets manager:
-
 ```bash
-./scripts/deploy.sh         # auto-detect: GCP, AWS, or Azure
-./scripts/deploy.sh gcp     # explicit: Cloud Run + Cloud Scheduler + Secret Manager
-./scripts/deploy.sh aws     # explicit: ECS Fargate + EventBridge + Secrets Manager
-./scripts/deploy.sh azure   # explicit: Container Apps + Timer Trigger + Key Vault
+./deploy.sh         # auto-detect: GCP, AWS, or Azure
+./deploy.sh gcp     # Cloud Run + Cloud Scheduler + Secret Manager
+./deploy.sh aws     # ECS Fargate + EventBridge + Secrets Manager
+./deploy.sh azure   # Container Apps + Timer Trigger + Key Vault
 ```
 
 | | GCP | AWS | Azure |
@@ -144,64 +165,56 @@ container service, scheduler, and secrets manager:
 
 ### Option 3: Cron on a VPS
 
-For personal use, a $5/mo VPS works fine:
-
 ```bash
-# Edit crontab
-crontab -e
-
 # Run competitors scan daily at 7am
-0 7 * * * cd /path/to/intel-sweep && python src/scanner.py competitors
+0 7 * * * cd /path/to/verity && python src/scanner.py competitors
 
 # Run tech patterns scan on Fridays
-0 7 * * 5 cd /path/to/intel-sweep && python src/scanner.py tech_patterns
+0 7 * * 5 cd /path/to/verity && python src/scanner.py tech_patterns
 ```
 
 ## Security Model
 
 See [SECURITY.md](SECURITY.md) for the full security model. Key principles:
 
-- **No ambient authority**: the scanner can search the web and call an LLM. Nothing else.
-- **No secrets in config**: all API keys are resolved through a pluggable secrets backend (env vars, `.env` file, GCP Secret Manager, AWS Secrets Manager, Azure Key Vault).
-- **Append-only audit log**: every action is recorded for review.
-- **Domain filtering**: block or allow-list which domains can be fetched.
-- **Rate limiting**: configurable per-hour caps on search and scoring calls.
-- **No plugin marketplace**: your config is your config. No supply chain risk.
+- **No ambient authority** — Verity can search the web and call an LLM. Nothing else.
+- **No secrets in config** — all API keys are resolved through a pluggable secrets backend (env vars, `.env` file, GCP Secret Manager, AWS Secrets Manager, Azure Key Vault)
+- **Append-only audit log** — every search, relevance score, and authenticity decision is recorded
+- **Domain filtering** — block or allow-list which domains can be fetched
+- **Rate limiting** — configurable per-hour caps on search and scoring calls
 
 ## Project Structure
 
 ```
-intel-sweep/
+verity/
 ├── config.example.yaml       # Full config reference (copy to config.yaml)
-├── .env.example              # API keys template (copy to .env)
-├── docker-compose.yml        # Run anywhere with Docker
+├── config/
+│   └── source_reputation.yaml  # Domain trust tier database (~80 pre-classified domains)
+├── docker-compose.yml
 ├── Dockerfile
 ├── requirements.txt
 ├── src/
-│   ├── scanner.py            # Main orchestrator + entry points
+│   ├── scanner.py            # Main orchestrator (Verity class) + CLI + Cloud Function entry
+│   ├── authenticity.py       # Three-layer authenticity engine
 │   ├── searcher.py           # Web search provider abstraction
 │   ├── scorer.py             # LLM relevance scoring (Gemini/OpenAI/Anthropic/Ollama)
 │   ├── notifier.py           # Slack, Telegram, webhook delivery
 │   ├── store.py              # Dedup + approval state + export (Firestore/SQLite/JSON)
 │   ├── secrets_resolver.py   # Pluggable secrets (env/.env/GCP/AWS/Azure)
-│   ├── config_loader.py      # YAML loading + secrets validation
+│   ├── config_loader.py      # YAML loading + validation
 │   └── audit.py              # Append-only audit logging
-├── scripts/
-│   ├── deploy.sh             # Unified deploy (auto-detects cloud)
-│   ├── deploy-gcp.sh         # Cloud Run + Cloud Scheduler
-│   ├── deploy-aws.sh         # ECS Fargate + EventBridge
-│   ├── deploy-azure.sh       # Container Apps + Timer Trigger
-│   └── crontab               # Schedule for Docker/VPS deployment
-├── tests/
-├── docs/
-│   └── architecture.md
+├── tests/                    # 22 tests covering pipeline logic and authenticity layers
+├── deploy.sh                 # Unified deploy script
+├── deploy-gcp.sh
+├── deploy-aws.sh
+├── deploy-azure.sh
 ├── SECURITY.md
 └── LICENSE                   # Apache 2.0
 ```
 
 ## Contributing
 
-PRs welcome. Please read [SECURITY.md](SECURITY.md) before contributing — we take the security model seriously.
+PRs welcome. Please read [SECURITY.md](SECURITY.md) before contributing.
 
 ## License
 
